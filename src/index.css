@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --widget-font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  background-color: transparent;
+  font-family: var(--widget-font-family);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Modern Glassmorphism Styling for Widgets */
+.widget-card,
+.widget-card *,
+.widget-card span,
+.widget-card div,
+.widget-card p,
+.widget-card h1,
+.widget-card h2,
+.widget-card h3,
+.widget-card input,
+.widget-card button,
+.widget-card .font-sans,
+.widget-card [class*="font-sans"] {
+  font-family: var(--widget-font-family, 'Inter', system-ui, sans-serif) !important;
+}
+
+/* Explicit exception for code/mono elements */
+.widget-card .font-mono,
+.widget-card [class*="font-mono"] {
+  font-family: 'JetBrains Mono', Consolas, monospace !important;
+}
+
+/* Explicit exception for serif elements */
+.widget-card .font-serif,
+.widget-card [class*="font-serif"] {
+  font-family: 'Playfair Display', Georgia, serif !important;
+}
+
+.widget-card {
+  font-family: var(--widget-font-family);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  ), rgba(18, 20, 26, 0.65);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.65),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35);
+  border-radius: 20px;
+  transition: box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease,
+              background 0.25s ease;
+  will-change: transform;
+}
+
+.widget-card:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.11) 0%,
+    rgba(255, 255, 255, 0.03) 100%
+  ), rgba(22, 24, 32, 0.72);
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 
+    0 26px 60px rgba(0, 0, 0, 0.75),
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.widget-card.is-dragging {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  ), rgba(24, 27, 36, 0.85);
+  box-shadow: 
+    0 32px 72px rgba(0, 0, 0, 0.9),
+    inset 0 1px 2px 0 rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.38);
+  cursor: grabbing !important;
+  opacity: 0.96;
+  /* Disable all transitions during drag to prevent jank */
+  transition: none !important;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
