@@ -34,13 +34,31 @@ export const MediaFrameWidget: React.FC<MediaFrameProps> = ({ config, width, hei
     ? filterClasses[config.filter] 
     : filterClasses.contrast;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && onUpdateConfig) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         if (event.target?.result) {
-          onUpdateConfig({ imageUrl: event.target.result as string });
+          const rawData = event.target.result as string;
+          // If running inside Electron, save directly to public/media/
+          if (window.electronAPI?.saveMediaImage) {
+            try {
+              const res = await window.electronAPI.saveMediaImage({
+                fileName: `media_${Date.now()}_${file.name}`,
+                dataUrl: rawData,
+              });
+              if (res.success && res.url) {
+                onUpdateConfig({ imageUrl: res.url });
+                setImgError(false);
+                return;
+              }
+            } catch (err) {
+              console.error('Failed to save media image to public/media:', err);
+            }
+          }
+          // Fallback to data URL
+          onUpdateConfig({ imageUrl: rawData });
           setImgError(false);
         }
       };
