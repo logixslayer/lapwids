@@ -459,6 +459,80 @@ ipcMain.handle('save-wallpaper-image', async (_event, { fileName, dataUrl }) => 
   }
 });
 
+// Save template media/wallpaper asset into public/templates/ (and dist/templates/)
+ipcMain.handle('save-template-asset', async (_event, { fileName, dataUrl }) => {
+  try {
+    const publicTemplatesDir = path.join(__dirname, '../public/templates');
+    const distTemplatesDir = path.join(__dirname, '../dist/templates');
+    if (!fs.existsSync(publicTemplatesDir)) {
+      fs.mkdirSync(publicTemplatesDir, { recursive: true });
+    }
+    if (!fs.existsSync(distTemplatesDir)) {
+      fs.mkdirSync(distTemplatesDir, { recursive: true });
+    }
+
+    const safeName = (fileName || `asset_${Date.now()}.png`).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const destPath = path.join(publicTemplatesDir, safeName);
+    const distDestPath = path.join(distTemplatesDir, safeName);
+
+    if (dataUrl && dataUrl.includes('base64,')) {
+      const base64Data = dataUrl.split('base64,')[1];
+      const buffer = Buffer.from(base64Data, 'base64');
+      fs.writeFileSync(destPath, buffer);
+      try {
+        fs.writeFileSync(distDestPath, buffer);
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    return {
+      success: true,
+      url: `/templates/${safeName}`,
+    };
+  } catch (err) {
+    console.error('save-template-asset error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+// Append a template directly to src/data/templates.ts if running in dev mode
+ipcMain.handle('save-builtin-template', async (_event, templateData) => {
+  try {
+    const templatesFilePath = path.join(__dirname, '../src/data/templates.ts');
+    if (!fs.existsSync(templatesFilePath)) {
+      return { success: false, error: 'templates.ts file not found' };
+    }
+
+    let fileContent = fs.readFileSync(templatesFilePath, 'utf8');
+
+    // Find BUILTIN_TEMPLATES array and append or replace if id matches
+    const jsonStr = JSON.stringify(templateData, null, 2);
+    // Format JSON slightly to match TypeScript aesthetics
+    const formattedObject = jsonStr.replace(/"([^"]+)":/g, '$1:');
+
+    // Find closing bracket of BUILTIN_TEMPLATES = [ ... ];
+    const marker = 'export const BUILTIN_TEMPLATES: DesktopTemplate[] = [';
+    const markerIdx = fileContent.indexOf(marker);
+    if (markerIdx === -1) {
+      return { success: false, error: 'BUILTIN_TEMPLATES marker not found in templates.ts' };
+    }
+
+    // Insert new template right after marker
+    const insertIdx = markerIdx + marker.length;
+    const newContent = 
+      fileContent.slice(0, insertIdx) +
+      '\n  ' + formattedObject + ',' +
+      fileContent.slice(insertIdx);
+
+    fs.writeFileSync(templatesFilePath, newContent, 'utf8');
+    return { success: true };
+  } catch (err) {
+    console.error('save-builtin-template error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // Native Windows Context Menu for Widgets
 ipcMain.on('show-widget-context-menu', (event, { widgetId, isLocked }) => {
   const isLaunchAtStartup = getAutoLaunch();

@@ -47,4 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAutoLaunch: (enabled) => ipcRenderer.invoke('set-auto-launch', enabled),
   saveMediaImage: (params) => ipcRenderer.invoke('save-media-image', params),
   saveWallpaperImage: (params) => ipcRenderer.invoke('save-wallpaper-image', params),
+  saveTemplateAsset: (params) => ipcRenderer.invoke('save-template-asset', params),
+  saveBuiltinTemplate: (params) => ipcRenderer.invoke('save-builtin-template', params),
 });
+

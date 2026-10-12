@@ -33,7 +33,9 @@ import {
   Bookmark,
   BookmarkPlus,
   CheckCircle2,
-  X
+  X,
+  Code,
+  Copy
 } from 'lucide-react';
 import { subscribeToSync, broadcastSettings, broadcastWidgets, applyFontToDOM } from '../utils/syncChannel';
 import { BUILTIN_TEMPLATES, loadCustomTemplates, saveCustomTemplate, deleteCustomTemplate } from '../data/templates';
@@ -108,6 +110,9 @@ export const SettingsApp: React.FC = () => {
   const [saveTemplateName, setSaveTemplateName] = useState('');
   const [saveTemplateTagline, setSaveTemplateTagline] = useState('');
   const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null);
+  const [isSavingTemplateAssets, setIsSavingTemplateAssets] = useState(false);
+  const [codeExportTemplate, setCodeExportTemplate] = useState<DesktopTemplate | null>(null);
+  const [copiedCodeNotice, setCopiedCodeNotice] = useState(false);
 
   const allTemplates = [...BUILTIN_TEMPLATES, ...customTemplates];
 
@@ -130,31 +135,112 @@ export const SettingsApp: React.FC = () => {
     setAppliedTemplateId(template.id);
   };
 
-  const handleSaveCurrentAsTemplate = (e: React.FormEvent) => {
+  const handleSaveCurrentAsTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!saveTemplateName.trim()) return;
 
-    const newCustomTemplate: DesktopTemplate = {
-      id: `custom-${Date.now()}`,
-      name: saveTemplateName.trim(),
-      tagline: saveTemplateTagline.trim() || 'Custom Saved Desktop Setup',
-      category: 'My Saved',
-      description: `Custom layout with ${widgets.length} widgets and ${settings.fontFamily || 'Inter'} typography.`,
-      wallpaperUrl: settings.customWallpaperUrl,
-      wallpaperPreset: settings.wallpaperPreset,
-      backgroundMode: settings.backgroundMode,
-      fontFamily: settings.fontFamily || 'Inter',
-      accentColor: settings.accentColor || '#ffffff',
-      widgets: widgets,
-      isCustom: true,
-    };
+    setIsSavingTemplateAssets(true);
 
-    const updated = saveCustomTemplate(newCustomTemplate);
-    setCustomTemplates(updated);
-    setIsSaveModalOpen(false);
-    setSaveTemplateName('');
-    setSaveTemplateTagline('');
-    setAppliedTemplateId(newCustomTemplate.id);
+    try {
+      // Process widgets and bundle any local / base64 media images into public/templates/
+      const bundledWidgets: WidgetInstance[] = [];
+
+      for (let i = 0; i < widgets.length; i++) {
+        const w = widgets[i];
+        if (w.type === 'media' && w.config && 'imageUrl' in w.config) {
+          const imgUrl = (w.config as any).imageUrl as string;
+          // If the image is a base64 data URL or local path, bundle it!
+          if (imgUrl && (imgUrl.startsWith('data:image/') || imgUrl.startsWith('file:') || imgUrl.includes(':\\'))) {
+            if (window.electronAPI?.saveTemplateAsset) {
+              const safeFileName = `template_${Date.now()}_media_${i}.png`;
+              const res = await window.electronAPI.saveTemplateAsset({
+                fileName: safeFileName,
+                dataUrl: imgUrl,
+              });
+              if (res.success && res.url) {
+                bundledWidgets.push({
+                  ...w,
+                  config: {
+                    ...w.config,
+                    imageUrl: res.url,
+                  },
+                });
+                continue;
+              }
+            }
+          }
+        }
+        bundledWidgets.push(w);
+      }
+
+      // Also bundle custom wallpaper if base64/local
+      let finalWallpaperUrl = settings.customWallpaperUrl;
+      if (finalWallpaperUrl && (finalWallpaperUrl.startsWith('data:image/') || finalWallpaperUrl.startsWith('file:'))) {
+        if (window.electronAPI?.saveTemplateAsset) {
+          const res = await window.electronAPI.saveTemplateAsset({
+            fileName: `template_wallpaper_${Date.now()}.png`,
+            dataUrl: finalWallpaperUrl,
+          });
+          if (res.success && res.url) {
+            finalWallpaperUrl = res.url;
+          }
+        }
+      }
+
+      const newCustomTemplate: DesktopTemplate = {
+        id: `custom-${Date.now()}`,
+        name: saveTemplateName.trim(),
+        tagline: saveTemplateTagline.trim() || 'Custom Saved Desktop Setup',
+        category: 'My Saved',
+        description: `Custom layout with ${bundledWidgets.length} widgets and ${settings.fontFamily || 'Inter'} typography.`,
+        wallpaperUrl: finalWallpaperUrl,
+        wallpaperPreset: settings.wallpaperPreset,
+        backgroundMode: settings.backgroundMode,
+        fontFamily: settings.fontFamily || 'Inter',
+        accentColor: settings.accentColor || '#ffffff',
+        widgets: bundledWidgets,
+        isCustom: true,
+      };
+
+      const updated = saveCustomTemplate(newCustomTemplate);
+      setCustomTemplates(updated);
+
+      // Also update active widget list in case URLs were converted to bundled paths
+      setWidgets(bundledWidgets);
+      broadcastWidgets(bundledWidgets);
+
+      setIsSaveModalOpen(false);
+      setSaveTemplateName('');
+      setSaveTemplateTagline('');
+      setAppliedTemplateId(newCustomTemplate.id);
+    } catch (err) {
+      console.error('Failed to save template assets:', err);
+    } finally {
+      setIsSavingTemplateAssets(false);
+    }
+  };
+
+  const handleSaveAsBuiltinSource = async (tmpl: DesktopTemplate) => {
+    if (!window.electronAPI?.saveBuiltinTemplate) {
+      alert('Built-in code export is only available in Electron developer mode.');
+      return;
+    }
+    const cleanTemplate = {
+      id: tmpl.id.startsWith('custom-') ? tmpl.id.replace('custom-', 'template-') : tmpl.id,
+      name: tmpl.name,
+      tagline: tmpl.tagline,
+      category: tmpl.category === 'My Saved' ? 'Custom Curated' : tmpl.category,
+      description: tmpl.description,
+      fontFamily: tmpl.fontFamily,
+      accentColor: tmpl.accentColor,
+      widgets: tmpl.widgets,
+    };
+    const res = await window.electronAPI.saveBuiltinTemplate(cleanTemplate);
+    if (res.success) {
+      alert(`Success! "${tmpl.name}" has been permanently appended to src/data/templates.ts as a global built-in template!`);
+    } else {
+      alert(`Error saving to templates.ts: ${res.error || 'Unknown error'}`);
+    }
   };
 
   const handleDeleteCustomTemplate = (id: string, e: React.MouseEvent) => {
@@ -550,13 +636,25 @@ export const SettingsApp: React.FC = () => {
 
                             <div className="flex items-center gap-1.5">
                               {t.isCustom && (
-                                <button
-                                  onClick={(e) => handleDeleteCustomTemplate(t.id, e)}
-                                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 transition-colors"
-                                  title="Delete Custom Template"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCodeExportTemplate(t);
+                                    }}
+                                    className="p-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 transition-colors"
+                                    title="Export as Built-in Code / Bundle Globally"
+                                  >
+                                    <Code size={13} />
+                                  </button>
+                                  <button
+                                    onClick={(e) => handleDeleteCustomTemplate(t.id, e)}
+                                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 transition-colors"
+                                    title="Delete Custom Template"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </>
                               )}
 
                               <button
@@ -1898,6 +1996,7 @@ export const SettingsApp: React.FC = () => {
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
                 <button
                   type="button"
+                  disabled={isSavingTemplateAssets}
                   onClick={() => setIsSaveModalOpen(false)}
                   className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-neutral-300 transition-colors"
                 >
@@ -1905,12 +2004,127 @@ export const SettingsApp: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-xs font-semibold text-black transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                  disabled={isSavingTemplateAssets}
+                  className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-xs font-semibold text-black transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] flex items-center gap-2"
                 >
-                  Save Preset
+                  {isSavingTemplateAssets ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      <span>Bundling Assets...</span>
+                    </>
+                  ) : (
+                    <span>Save Preset</span>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CODE EXPORT & BUILT-IN SYNC */}
+      {codeExportTemplate && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#141720] border border-white/15 rounded-2xl w-full max-w-xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <Code size={16} className="text-cyan-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  Export Global Built-In Template: {codeExportTemplate.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setCodeExportTemplate(null);
+                  setCopiedCodeNotice(false);
+                }}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-300">
+              All images in this template are bundled in <code className="text-cyan-300 font-mono">public/templates/</code>. You can permanently register this template as a global built-in preset across all machines.
+            </p>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-neutral-400">TypeScript Preset Code</span>
+                <button
+                  onClick={() => {
+                    const code = JSON.stringify(
+                      {
+                        id: codeExportTemplate.id.startsWith('custom-') ? codeExportTemplate.id.replace('custom-', 'template-') : codeExportTemplate.id,
+                        name: codeExportTemplate.name,
+                        tagline: codeExportTemplate.tagline,
+                        category: codeExportTemplate.category === 'My Saved' ? 'Custom Curated' : codeExportTemplate.category,
+                        description: codeExportTemplate.description,
+                        fontFamily: codeExportTemplate.fontFamily,
+                        accentColor: codeExportTemplate.accentColor,
+                        widgets: codeExportTemplate.widgets,
+                      },
+                      null,
+                      2
+                    );
+                    navigator.clipboard.writeText(code);
+                    setCopiedCodeNotice(true);
+                    setTimeout(() => setCopiedCodeNotice(false), 2500);
+                  }}
+                  className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                >
+                  {copiedCodeNotice ? (
+                    <>
+                      <Check size={12} className="text-emerald-400" />
+                      <span className="text-emerald-400">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={12} />
+                      <span>Copy Code</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <pre className="p-3 rounded-xl bg-black/60 border border-white/10 text-[10px] font-mono text-neutral-300 max-h-56 overflow-auto scrollbar-thin">
+                {JSON.stringify(
+                  {
+                    id: codeExportTemplate.id.startsWith('custom-') ? codeExportTemplate.id.replace('custom-', 'template-') : codeExportTemplate.id,
+                    name: codeExportTemplate.name,
+                    tagline: codeExportTemplate.tagline,
+                    category: codeExportTemplate.category === 'My Saved' ? 'Custom Curated' : codeExportTemplate.category,
+                    description: codeExportTemplate.description,
+                    fontFamily: codeExportTemplate.fontFamily,
+                    accentColor: codeExportTemplate.accentColor,
+                    widgets: codeExportTemplate.widgets,
+                  },
+                  null,
+                  2
+                )}
+              </pre>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => handleSaveAsBuiltinSource(codeExportTemplate)}
+                className="px-3.5 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-xs font-medium text-cyan-300 border border-cyan-500/30 transition-colors flex items-center gap-1.5"
+              >
+                <Sparkles size={13} />
+                <span>Save Directly to src/data/templates.ts</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCodeExportTemplate(null);
+                  setCopiedCodeNotice(false);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

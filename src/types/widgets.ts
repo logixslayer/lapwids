@@ -151,6 +151,10 @@ declare global {
       onWidgetActionToggleLock?: (callback: (widgetId: string) => void) => () => void;
       onWidgetActionDuplicate?: (callback: (widgetId: string) => void) => () => void;
       onWidgetActionSettings?: (callback: (widgetId: string) => void) => () => void;
+      saveMediaImage?: (params: { fileName: string; dataUrl: string }) => Promise<{ success: boolean; url?: string; error?: string }>;
+      saveWallpaperImage?: (params: { fileName: string; dataUrl: string }) => Promise<{ success: boolean; url?: string; error?: string }>;
+      saveTemplateAsset?: (params: { fileName: string; dataUrl: string }) => Promise<{ success: boolean; url?: string; error?: string }>;
+      saveBuiltinTemplate?: (templateData: any) => Promise<{ success: boolean; error?: string }>;
     };
   }
 }
