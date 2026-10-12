@@ -22,5 +22,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('widgets-sync', handler);
     return () => ipcRenderer.removeListener('widgets-sync', handler);
   },
+  showWidgetContextMenu: (params) => ipcRenderer.send('show-widget-context-menu', params),
+  onWidgetActionDelete: (callback) => {
+    const handler = (_event, widgetId) => callback(widgetId);
+    ipcRenderer.on('widget-action-delete', handler);
+    return () => ipcRenderer.removeListener('widget-action-delete', handler);
+  },
+  onWidgetActionToggleLock: (callback) => {
+    const handler = (_event, widgetId) => callback(widgetId);
+    ipcRenderer.on('widget-action-toggle-lock', handler);
+    return () => ipcRenderer.removeListener('widget-action-toggle-lock', handler);
+  },
+  onWidgetActionDuplicate: (callback) => {
+    const handler = (_event, widgetId) => callback(widgetId);
+    ipcRenderer.on('widget-action-duplicate', handler);
+    return () => ipcRenderer.removeListener('widget-action-duplicate', handler);
+  },
+  onWidgetActionSettings: (callback) => {
+    const handler = (_event, widgetId) => callback(widgetId);
+    ipcRenderer.on('widget-action-settings', handler);
+    return () => ipcRenderer.removeListener('widget-action-settings', handler);
+  },
+  getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
+  setAutoLaunch: (enabled) => ipcRenderer.invoke('set-auto-launch', enabled),
+  saveMediaImage: (params) => ipcRenderer.invoke('save-media-image', params),
+  saveWallpaperImage: (params) => ipcRenderer.invoke('save-wallpaper-image', params),
 });
-

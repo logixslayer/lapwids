@@ -18,15 +18,21 @@ export const MediaFrameWidget: React.FC<MediaFrameProps> = ({ config, width, hei
   const isCompact = currentW < 140 || currentH < 140;
 
   // Filter class mappings
-  const filterClasses = {
+  const filterClasses: Record<string, string> = {
     none: '',
     grayscale: 'grayscale contrast-125',
     contrast: 'grayscale contrast-[180%] brightness-90',
     noir: 'grayscale contrast-[220%] brightness-85',
     vintage: 'sepia-[30%] contrast-125 brightness-90',
+    vibrant: 'saturate-150 contrast-110',
+    warm: 'sepia-[20%] saturate-125',
+    cool: 'hue-rotate-15 contrast-110',
+    cinematic: 'contrast-125 brightness-95 saturate-110',
   };
 
-  const activeFilter = config.filter ? filterClasses[config.filter] : filterClasses.contrast;
+  const activeFilter = config.filter && filterClasses[config.filter] !== undefined 
+    ? filterClasses[config.filter] 
+    : filterClasses.contrast;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -42,13 +48,20 @@ export const MediaFrameWidget: React.FC<MediaFrameProps> = ({ config, width, hei
     }
   };
 
+  const bgTransparency = config.backgroundTransparency ?? 0;
+  const isFullyInvisible = bgTransparency >= 0.99;
+
   return (
     <div 
       className={`relative w-full h-full ${isCompact ? 'p-1' : 'p-1.5'} group overflow-hidden select-none`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className={`w-full h-full ${isCompact ? 'rounded-xl' : 'rounded-2xl'} overflow-hidden bg-black/30 backdrop-blur-md border border-white/[0.08] relative shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]`}>
+      <div className={`w-full h-full ${isCompact ? 'rounded-xl' : 'rounded-2xl'} overflow-hidden ${
+        isFullyInvisible
+          ? 'bg-transparent border border-transparent shadow-none'
+          : 'bg-black/30 backdrop-blur-md border border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]'
+      } relative`}>
         {!imgError ? (
           <img
             src={config.imageUrl}
@@ -69,10 +82,13 @@ export const MediaFrameWidget: React.FC<MediaFrameProps> = ({ config, width, hei
           </div>
         )}
 
-        {/* Upload icon on hover */}
+        {/* Minimal upload button on top right */}
         {isHovered && onUpdateConfig && (
-          <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-xl p-1.5 rounded-lg border border-white/20 shadow-xl z-20">
-            <label className="cursor-pointer text-neutral-300 hover:text-white transition-colors" title="Upload Image">
+          <div 
+            className="absolute top-2 right-2 bg-black/60 backdrop-blur-xl p-1.5 rounded-lg border border-white/20 shadow-xl z-20"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <label className="cursor-pointer text-neutral-300 hover:text-white transition-colors flex items-center justify-center" title="Upload Image">
               <Upload size={12} />
               <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
             </label>

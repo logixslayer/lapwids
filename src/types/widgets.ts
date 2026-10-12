@@ -4,6 +4,11 @@ export interface BaseWidgetConfig {
   title?: string;
   opacity?: number;
   scale?: number;
+  fontStyle?: string;
+  fontSize?: number; // scale multiplier e.g. 0.8 - 1.5, default 1
+  fontWeight?: 'light' | 'normal' | 'medium' | 'semibold' | 'bold' | 'bolder' | string; // font weight e.g. normal, medium, bold, bolder
+  fontColor?: string; // hex color or custom color string
+  backgroundTransparency?: number; // 0 = default glass card, 1 = 100% invisible background
 }
 
 export interface ClockConfig extends BaseWidgetConfig {
@@ -11,6 +16,14 @@ export interface ClockConfig extends BaseWidgetConfig {
   showSeconds: boolean;
   showAmPm: boolean;
   theme: 'dark-slate' | 'matte-black' | 'cyberpunk' | 'monochrome';
+  clockType?: 'flip' | 'minimal-digital'; // 'flip' or 'minimal-digital' (digital text with date header)
+  showDate?: boolean;
+  dateColor?: string; // e.g. '#2563eb' or custom
+  dateFontSize?: number; // scale multiplier e.g. 0.8 - 2.0
+  dateFontStyle?: string; // custom font family for the date header
+  timeColor?: string; // time digits color
+  dateFormat?: 'uppercase' | 'normal' | 'short'; // 'WEDNESDAY 21 MAY' etc
+  cardBgColor?: string; // custom card background color e.g. '#444444'
 }
 
 export interface WeatherConfig extends BaseWidgetConfig {
@@ -19,12 +32,19 @@ export interface WeatherConfig extends BaseWidgetConfig {
   longitude: number;
   unit: 'fahrenheit' | 'celsius';
   customLocationName?: string;
+  tempColor?: string; // Color specifically for temperature degrees text
+  iconColor?: string; // Color specifically for weather icons
 }
 
 export interface CalendarConfig extends BaseWidgetConfig {
   showWeekNumbers: boolean;
   startMonday: boolean;
   notes?: Record<string, string>; // YYYY-MM-DD -> note
+  headerFontStyle?: string; // Font style specifically for Month and Year title
+  headerFontColor?: string; // Font color specifically for Month and Year title
+  showTodayButton?: boolean; // Whether to display the Today jump button (default false per user request)
+  todayColor?: string; // Text color for today's date (defaults to blue)
+  showAdjacentDays?: boolean; // Whether to display days from previous/next months (default false per user request)
 }
 
 export interface MediaConfig extends BaseWidgetConfig {
@@ -49,6 +69,8 @@ export interface TodoConfig extends BaseWidgetConfig {
   headerTitle: string; // e.g. "to be list: ˚ʚ♡ɞ˚"
   items: TodoItem[];
   headerDecor: string;
+  headerFontSize?: number; // scale multiplier e.g. 0.8 - 1.8
+  headerColor?: string; // custom title color
 }
 
 export interface SystemMonitorConfig extends BaseWidgetConfig {
@@ -124,6 +146,11 @@ declare global {
       onSettingsSync?: (callback: (settings: AppSettings) => void) => () => void;
       syncWidgets?: (widgets: WidgetInstance[]) => void;
       onWidgetsSync?: (callback: (widgets: WidgetInstance[]) => void) => () => void;
+      showWidgetContextMenu?: (params: { widgetId: string; isLocked: boolean }) => void;
+      onWidgetActionDelete?: (callback: (widgetId: string) => void) => () => void;
+      onWidgetActionToggleLock?: (callback: (widgetId: string) => void) => () => void;
+      onWidgetActionDuplicate?: (callback: (widgetId: string) => void) => () => void;
+      onWidgetActionSettings?: (callback: (widgetId: string) => void) => () => void;
     };
   }
 }

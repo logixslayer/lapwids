@@ -9,8 +9,25 @@ interface CalendarWidgetProps {
 }
 
 export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, height }) => {
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 1, 1));
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2026, 1, 21));
+  // Always default to today's real current date
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+
+  // Keep today's date updated in case day rolls over
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      // If day changed, keep selectedDate and view synced
+      setSelectedDate((prev) => {
+        if (prev.getDate() !== now.getDate() || prev.getMonth() !== now.getMonth() || prev.getFullYear() !== now.getFullYear()) {
+          setCurrentDate(new Date(now.getFullYear(), now.getMonth(), 1));
+          return now;
+        }
+        return prev;
+      });
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -112,12 +129,18 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
   const currentH = height ?? 260;
 
   const isUltraCompact = currentH < 150 || currentW < 145;
-  const hasWeekNumbers = currentW >= 195 && config.showWeekNumbers !== false;
-  const showBottomToday = currentH >= 220;
+  // Only show Today button if explicitly enabled (default false per user request)
+  const showTodayButton = config.showTodayButton === true;
+  const showBottomToday = showTodayButton && currentH >= 220;
+
+  // Real today reference
+  const realToday = new Date();
+  const todayHighlightColor = config.todayColor || '#38bdf8'; // Blue highlight color
 
   // Ultra-compact Day Glance Mode
   if (isUltraCompact) {
     const dayName = selectedDate.toLocaleDateString('en-US', { weekday: 'short' });
+    const isToday = isSameDay(selectedDate, realToday);
     return (
       <div className="flex flex-col justify-between p-2.5 h-full text-neutral-300 select-none overflow-hidden">
         {/* Month Navigation */}
@@ -125,7 +148,13 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
           <button onClick={handlePrevMonth} className="p-0.5 text-neutral-400 hover:text-white">
             <ChevronLeft size={11} />
           </button>
-          <span className="font-medium text-neutral-200 text-[10px]">
+          <span 
+            style={{ 
+              fontFamily: config.headerFontStyle ? `'${config.headerFontStyle}', sans-serif` : undefined,
+              color: config.headerFontColor || config.fontColor || undefined
+            }}
+            className="font-medium text-neutral-200 text-[10px]"
+          >
             {monthNames[month].slice(0, 3)} {year}
           </span>
           <button onClick={handleNextMonth} className="p-0.5 text-neutral-400 hover:text-white">
@@ -135,7 +164,10 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
 
         {/* Center: Big Day */}
         <div className="flex flex-col items-center justify-center my-auto py-1">
-          <span className="text-[32px] font-light text-white leading-none tracking-tight">
+          <span 
+            style={{ color: isToday ? todayHighlightColor : undefined }}
+            className={`text-[32px] font-light leading-none tracking-tight ${isToday ? 'font-medium' : 'text-white'}`}
+          >
             {selectedDate.getDate()}
           </span>
           <span className="text-[10px] text-neutral-400 mt-1 uppercase tracking-wider font-medium">
@@ -143,38 +175,51 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
           </span>
         </div>
 
-        {/* Mini Today indicator */}
-        <div className="flex justify-center">
-          <button
-            onClick={handleToday}
-            className="text-[9px] px-2 py-0.5 rounded bg-white/[0.06] text-neutral-300 hover:text-white"
-          >
-            Today
-          </button>
-        </div>
+        {/* Mini Today indicator only if explicitly turned on */}
+        {showTodayButton && (
+          <div className="flex justify-center">
+            <button
+              onClick={handleToday}
+              className="text-[9px] px-2 py-0.5 rounded bg-white/[0.06] text-neutral-300 hover:text-white"
+            >
+              Today
+            </button>
+          </div>
+        )}
       </div>
     );
   }
 
   // If height is between 150 and 220, or width is tight, scale the grid cleanly so it never clips
+  const fontMultiplier = config.fontSize ?? 1;
   const baseCalH = showBottomToday ? 250 : 210;
-  const baseCalW = hasWeekNumbers ? 220 : 190;
-  const needsScale = currentH < baseCalH || currentW < baseCalW;
-  const scale = needsScale 
+  const baseCalW = 195;
+  const needsScale = currentH < baseCalH || currentW < baseCalW || fontMultiplier !== 1;
+  const scale = (needsScale 
     ? Math.min((currentW - 12) / baseCalW, (currentH - 12) / baseCalH)
-    : 1;
+    : 1) * fontMultiplier;
 
-  const content = (
+  const bgTransparency = config.backgroundTransparency ?? 0;
+  const isFullyInvisible = bgTransparency >= 0.99;
+
+    const effectiveFontWeight = config.fontWeight === 'bolder' ? '800' : config.fontWeight === 'bold' ? '700' : config.fontWeight === 'medium' ? '500' : config.fontWeight === 'normal' ? '400' : config.fontWeight || undefined;
+
+    const content = (
     <div 
       style={{
         width: `${baseCalW}px`,
-        transform: needsScale ? `scale(${scale})` : undefined,
+        transform: scale !== 1 ? `scale(${scale})` : undefined,
         transformOrigin: 'center center',
+        fontWeight: effectiveFontWeight,
       }}
       className="flex flex-col justify-between text-neutral-300 select-none text-[11px]"
     >
       {/* Month & Year Navigation Header */}
-      <div className="flex items-center justify-between px-2 py-1 mb-1 rounded-lg bg-white/[0.05] backdrop-blur-md border border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]">
+      <div className={`flex items-center justify-between px-2 py-1 mb-1 rounded-lg ${
+        isFullyInvisible 
+          ? 'bg-transparent border-transparent shadow-none' 
+          : 'bg-white/[0.05] backdrop-blur-md border border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]'
+      }`}>
         <button
           onClick={handlePrevMonth}
           className="p-0.5 text-neutral-400 hover:text-white transition-colors"
@@ -182,14 +227,22 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
           <ChevronLeft size={12} />
         </button>
 
-        <span className="font-normal text-neutral-200 tracking-wide text-[11px]">
+        <span 
+          style={{ 
+            fontFamily: config.headerFontStyle ? `'${config.headerFontStyle}', sans-serif` : undefined,
+            color: config.headerFontColor || config.fontColor || undefined,
+            fontWeight: effectiveFontWeight || '500',
+          }}
+          className="tracking-wide text-[11px]"
+        >
           {monthNames[month]} {year}
         </span>
 
         <div className="flex items-center gap-1">
-          {!showBottomToday && (
+          {showTodayButton && !showBottomToday && (
             <button
               onClick={handleToday}
+              style={{ color: config.fontColor || undefined }}
               className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.08] hover:bg-white/[0.15] text-neutral-200 transition-colors border border-white/[0.08]"
             >
               Today
@@ -205,8 +258,13 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
       </div>
 
       {/* Weekday headers: M T W T F S S */}
-      <div className={`grid ${hasWeekNumbers ? 'grid-cols-[16px_repeat(7,1fr)]' : 'grid-cols-7'} gap-1 text-center text-[10px] text-neutral-400 pb-1 border-b border-white/[0.05]`}>
-        {hasWeekNumbers && <span className="text-neutral-400"></span>}
+      <div 
+        style={{ 
+          color: config.fontColor ? `${config.fontColor}99` : undefined,
+          fontWeight: effectiveFontWeight,
+        }}
+        className="grid grid-cols-7 gap-1 text-center text-[10px] text-neutral-400 pb-1 border-b border-white/[0.05]"
+      >
         <span>M</span>
         <span>T</span>
         <span>W</span>
@@ -219,15 +277,15 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
       {/* Days Grid */}
       <div className="space-y-0.5 my-1">
         {weeks.map((week, wIdx) => (
-          <div key={wIdx} className={`grid ${hasWeekNumbers ? 'grid-cols-[16px_repeat(7,1fr)]' : 'grid-cols-7'} gap-1 items-center text-center`}>
-            {hasWeekNumbers && (
-              <span className="text-[9px] text-neutral-400 font-mono">
-                {week.weekNumber}
-              </span>
-            )}
+          <div key={wIdx} className="grid grid-cols-7 gap-1 items-center text-center">
 
             {/* 7 Days */}
             {week.days.map((dayItem, dIdx) => {
+              if (!dayItem.currentMonth && config.showAdjacentDays !== true) {
+                return <div key={dIdx} className="w-5 h-5 mx-auto" />;
+              }
+
+              const isToday = isSameDay(dayItem.date, realToday);
               const isSelected = isSameDay(dayItem.date, selectedDate);
               const isWeekend = dIdx >= 5;
 
@@ -235,11 +293,24 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
                 <button
                   key={dIdx}
                   onClick={() => setSelectedDate(dayItem.date)}
+                  style={{
+                    color: isToday
+                      ? todayHighlightColor
+                      : isSelected && !isToday
+                      ? '#ffffff'
+                      : !dayItem.currentMonth
+                      ? undefined
+                      : isWeekend
+                      ? undefined
+                      : config.fontColor || undefined,
+                  }}
                   className={`
                     w-5 h-5 mx-auto rounded flex items-center justify-center transition-all text-[10px]
-                    ${!dayItem.currentMonth ? 'text-neutral-400 opacity-40' : isWeekend ? 'text-[#e05252]' : 'text-neutral-200'}
-                    ${isSelected
-                      ? 'border border-white/30 bg-white/20 text-white font-medium shadow-[0_2px_8px_rgba(255,255,255,0.12)] backdrop-blur-sm'
+                    ${!dayItem.currentMonth ? 'text-neutral-500 opacity-40' : isWeekend ? 'text-[#e05252]' : 'text-neutral-200'}
+                    ${isToday 
+                      ? 'font-bold' 
+                      : isSelected 
+                      ? 'font-semibold text-white' 
                       : 'hover:bg-white/10 active:bg-white/20'}
                   `}
                 >
@@ -251,7 +322,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ config, width, h
         ))}
       </div>
 
-      {/* Bottom Center "Today" button if enough height */}
+      {/* Bottom Center "Today" button only if explicitly enabled */}
       {showBottomToday && (
         <div className="flex items-center justify-center pt-1 border-t border-white/[0.04]">
           <button

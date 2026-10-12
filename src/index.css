@@ -48,18 +48,18 @@ body {
 
 .widget-card {
   font-family: var(--widget-font-family);
-  background: linear-gradient(
+  background: var(--widget-card-bg, linear-gradient(
     135deg,
     rgba(255, 255, 255, 0.08) 0%,
     rgba(255, 255, 255, 0.02) 100%
-  ), rgba(18, 20, 26, 0.65);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 
+  ), rgba(18, 20, 26, 0.65));
+  backdrop-filter: var(--widget-card-backdrop, blur(24px) saturate(180%));
+  -webkit-backdrop-filter: var(--widget-card-backdrop, blur(24px) saturate(180%));
+  border: var(--widget-card-border, 1px solid rgba(255, 255, 255, 0.12));
+  box-shadow: var(--widget-card-shadow, 
     0 20px 50px rgba(0, 0, 0, 0.65),
     inset 0 1px 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35);
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35));
   border-radius: 20px;
   transition: box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
               border-color 0.25s ease,

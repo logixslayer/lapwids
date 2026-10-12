@@ -74,27 +74,33 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
     };
   }, [config?.latitude, config?.longitude, config?.unit, config?.customLocationName]);
 
-  // Clean monochrome minimalist weather icons matching reference screenshot
+  const effectiveTempColor = config?.tempColor || config?.fontColor || '#ffffff';
+  const effectiveIconColor = config?.iconColor || config?.fontColor || undefined;
+
+  // Clean minimalist weather icons with dynamic iconColor support
   const getWeatherIcon = (code: number, size = 20) => {
-    if (code === 0) return <Sun size={size} className="text-neutral-200" strokeWidth={1.5} />;
-    if (code === 1 || code === 2) return <CloudSun size={size} className="text-neutral-200" strokeWidth={1.5} />;
-    if (code === 3) return <Cloud size={size} className="text-neutral-200" strokeWidth={1.5} />;
-    if (code >= 45 && code <= 48) return <CloudFog size={size} className="text-neutral-300" strokeWidth={1.5} />;
+    const iconStyle = effectiveIconColor ? { color: effectiveIconColor } : undefined;
+    const defaultClass = effectiveIconColor ? '' : 'text-neutral-200';
+
+    if (code === 0) return <Sun size={size} style={iconStyle} className={defaultClass} strokeWidth={1.5} />;
+    if (code === 1 || code === 2) return <CloudSun size={size} style={iconStyle} className={defaultClass} strokeWidth={1.5} />;
+    if (code === 3) return <Cloud size={size} style={iconStyle} className={defaultClass} strokeWidth={1.5} />;
+    if (code >= 45 && code <= 48) return <CloudFog size={size} style={iconStyle} className={effectiveIconColor ? '' : 'text-neutral-300'} strokeWidth={1.5} />;
     if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
       return (
         <div className="flex flex-col items-center">
-          <Cloud size={size} className="text-neutral-200" strokeWidth={1.5} />
+          <Cloud size={size} style={iconStyle} className={defaultClass} strokeWidth={1.5} />
           <div className="flex gap-0.5 mt-0.5">
-            <span className="w-0.5 h-1 bg-cyan-400/80 rounded-full" />
-            <span className="w-0.5 h-1 bg-cyan-400/80 rounded-full" />
-            <span className="w-0.5 h-1 bg-cyan-400/80 rounded-full" />
+            <span style={iconStyle ? { backgroundColor: effectiveIconColor } : undefined} className="w-0.5 h-1 bg-cyan-400/80 rounded-full" />
+            <span style={iconStyle ? { backgroundColor: effectiveIconColor } : undefined} className="w-0.5 h-1 bg-cyan-400/80 rounded-full" />
+            <span style={iconStyle ? { backgroundColor: effectiveIconColor } : undefined} className="w-0.5 h-1 bg-cyan-400/80 rounded-full" />
           </div>
         </div>
       );
     }
-    if (code >= 71 && code <= 77) return <Snowflake size={size} className="text-neutral-200" strokeWidth={1.5} />;
-    if (code >= 95) return <CloudLightning size={size} className="text-neutral-200" strokeWidth={1.5} />;
-    return <CloudRain size={size} className="text-neutral-200" strokeWidth={1.5} />;
+    if (code >= 71 && code <= 77) return <Snowflake size={size} style={iconStyle} className={defaultClass} strokeWidth={1.5} />;
+    if (code >= 95) return <CloudLightning size={size} style={iconStyle} className={defaultClass} strokeWidth={1.5} />;
+    return <CloudRain size={size} style={iconStyle} className={defaultClass} strokeWidth={1.5} />;
   };
 
   const getWmoDescription = (code: number): string => {
@@ -119,6 +125,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
   // Compact mode: when widget is small, show only temperature + icon
   const isCompact = currentW < 170 || currentH < 160;
 
+  const effectiveFontWeight = config?.fontWeight === 'bolder' ? '800' : config?.fontWeight === 'bold' ? '700' : config?.fontWeight === 'medium' ? '500' : config?.fontWeight === 'normal' ? '400' : config?.fontWeight || undefined;
+
   if (isCompact) {
     const compactBaseW = 100;
     const compactBaseH = 80;
@@ -136,13 +144,22 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
           }}
           className="flex-shrink-0 flex flex-col items-center justify-center gap-1 text-neutral-300"
         >
-          <div className="text-neutral-200">
+          <div>
             {getWeatherIcon(weatherCode, 28)}
           </div>
-          <div className="text-[32px] font-light tracking-tight text-white leading-none">
+          <div 
+            style={{ 
+              color: effectiveTempColor,
+              fontWeight: effectiveFontWeight || '300',
+            }}
+            className="text-[32px] tracking-tight leading-none"
+          >
             {currentTemp}{unitSymbol}
           </div>
-          <div className="text-[9px] text-neutral-400 truncate max-w-[90px] text-center">
+          <div 
+            style={{ fontWeight: effectiveFontWeight }}
+            className="text-[9px] text-neutral-400 truncate max-w-[90px] text-center"
+          >
             {conditionText}
           </div>
         </div>
@@ -153,11 +170,13 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
   // Check if user stretched the widget into a wide horizontal banner
   const isWideBanner = currentW >= 240 && currentH <= 165;
 
+  const fontMultiplier = config.fontSize ?? 1;
+
   if (isWideBanner) {
     const bannerW = 280;
     const bannerH = 120;
-    const bannerScale = Math.min((currentW - 12) / bannerW, (currentH - 12) / bannerH);
-    const finalBannerScale = Math.max(0.35, Math.min(bannerScale, 2.5));
+    const bannerScale = Math.min((currentW - 12) / bannerW, (currentH - 12) / bannerH) * fontMultiplier;
+    const finalBannerScale = Math.max(0.3, Math.min(bannerScale, 3.5));
 
     return (
       <div className="w-full h-full flex items-center justify-center select-none overflow-hidden p-1">
@@ -173,17 +192,29 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
         >
           {/* Left: Current Weather */}
           <div className="flex items-center gap-3 shrink-0 pr-3 border-r border-white/[0.06]">
-            <div className="text-neutral-200">
+            <div>
               {getWeatherIcon(weatherCode, 34)}
             </div>
             <div>
-              <div className="text-[30px] font-light tracking-tight text-white leading-none">
+              <div 
+                style={{ 
+                  color: effectiveTempColor,
+                  fontWeight: effectiveFontWeight || '300',
+                }}
+                className="text-[30px] tracking-tight leading-none"
+              >
                 {currentTemp}{unitSymbol}
               </div>
               <div className="text-[10px] text-neutral-400 mt-0.5">
                 Wind: {windSpeed} {windUnit}
               </div>
-              <div className="text-[11px] font-medium text-neutral-200 truncate max-w-[90px] mt-0.5">
+              <div 
+                style={{ 
+                  color: config.fontColor || undefined,
+                  fontWeight: effectiveFontWeight || '500',
+                }}
+                className="text-[11px] text-neutral-200 truncate max-w-[90px] mt-0.5"
+              >
                 {conditionText}
               </div>
             </div>
@@ -193,12 +224,30 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
           <div className="grid grid-cols-5 gap-2 text-center pl-2">
             {forecast.slice(0, 5).map((f, i) => (
               <div key={i} className="flex flex-col items-center">
-                <span className="text-[10px] font-medium text-neutral-400 mb-0.5">{f.day}</span>
+                <span 
+                  style={{ fontWeight: effectiveFontWeight }}
+                  className="text-[10px] text-neutral-400 mb-0.5"
+                >
+                  {f.day}
+                </span>
                 <div className="h-5 flex items-center justify-center my-0.5">
                   {getWeatherIcon(f.code, 15)}
                 </div>
-                <div className="text-[11px] font-normal text-neutral-100">{f.tempMax}°</div>
-                <div className="text-[9px] font-normal text-neutral-500">{f.tempMin}°</div>
+                <div 
+                  style={{ 
+                    color: effectiveTempColor,
+                    fontWeight: effectiveFontWeight,
+                  }}
+                  className="text-[11px] font-normal"
+                >
+                  {f.tempMax}°
+                </div>
+                <div 
+                  style={{ fontWeight: effectiveFontWeight }}
+                  className="text-[9px] font-normal text-neutral-500"
+                >
+                  {f.tempMin}°
+                </div>
               </div>
             ))}
           </div>
@@ -210,8 +259,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
   // Standard square / portrait layout with uniform auto-scaling
   const baseW = 215;
   const baseH = 205;
-  const scale = Math.min((currentW - 12) / baseW, (currentH - 12) / baseH);
-  const finalScale = Math.max(0.35, Math.min(scale, 3.0));
+  const scale = Math.min((currentW - 12) / baseW, (currentH - 12) / baseH) * fontMultiplier;
+  const finalScale = Math.max(0.3, Math.min(scale, 4.0));
 
   return (
     <div className="w-full h-full flex items-center justify-center select-none overflow-hidden p-1">
@@ -228,12 +277,18 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
         {/* Top Section: Icon, Temperature, Wind and Condition */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="text-neutral-200">
+            <div>
               {getWeatherIcon(weatherCode, 38)}
             </div>
 
             <div>
-              <div className="text-[34px] font-light tracking-tight text-white leading-none">
+              <div 
+                style={{ 
+                  color: effectiveTempColor,
+                  fontWeight: effectiveFontWeight || '300',
+                }}
+                className="text-[34px] tracking-tight leading-none"
+              >
                 {currentTemp}{unitSymbol}
               </div>
               <div className="text-[10px] text-neutral-400 mt-0.5">
@@ -242,7 +297,13 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
             </div>
           </div>
 
-          <div className="text-[12px] font-medium text-neutral-200 text-right max-w-[95px] leading-tight">
+          <div 
+            style={{ 
+              color: config.fontColor || undefined,
+              fontWeight: effectiveFontWeight || '500',
+            }}
+            className="text-[12px] text-neutral-200 text-right max-w-[95px] leading-tight"
+          >
             {conditionText}
           </div>
         </div>
@@ -252,12 +313,30 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ config, width, hei
           <div className="grid grid-cols-5 gap-1 text-center">
             {forecast.slice(0, 5).map((f, i) => (
               <div key={i} className="flex flex-col items-center">
-                <span className="text-[11px] font-medium text-neutral-400 mb-0.5">{f.day}</span>
+                <span 
+                  style={{ fontWeight: effectiveFontWeight }}
+                  className="text-[11px] text-neutral-400 mb-0.5"
+                >
+                  {f.day}
+                </span>
                 <div className="h-6 flex items-center justify-center my-0.5">
                   {getWeatherIcon(f.code, 16)}
                 </div>
-                <div className="text-[12px] font-normal text-neutral-100">{f.tempMax}°</div>
-                <div className="text-[10px] font-normal text-neutral-500">{f.tempMin}°</div>
+                <div 
+                  style={{ 
+                    color: effectiveTempColor,
+                    fontWeight: effectiveFontWeight,
+                  }}
+                  className="text-[12px] font-normal"
+                >
+                  {f.tempMax}°
+                </div>
+                <div 
+                  style={{ fontWeight: effectiveFontWeight }}
+                  className="text-[10px] font-normal text-neutral-500"
+                >
+                  {f.tempMin}°
+                </div>
               </div>
             ))}
           </div>

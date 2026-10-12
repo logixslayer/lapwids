@@ -70,6 +70,57 @@ export const WidgetBoard: React.FC = () => {
     }
   }, [settings.isPinnedBehind]);
 
+  // Listen to native Windows context menu actions from Electron
+  useEffect(() => {
+    if (!window.electronAPI) return;
+
+    const unDelete = window.electronAPI.onWidgetActionDelete?.((widgetId) => {
+      handleDeleteWidget(widgetId);
+    });
+
+    const unLock = window.electronAPI.onWidgetActionToggleLock?.((widgetId) => {
+      setWidgets((prev) => {
+        const next = prev.map((w) => (w.id === widgetId ? { ...w, isLocked: !w.isLocked } : w));
+        broadcastWidgets(next);
+        return next;
+      });
+    });
+
+    const unDuplicate = window.electronAPI.onWidgetActionDuplicate?.((widgetId) => {
+      setWidgets((prev) => {
+        const target = prev.find((w) => w.id === widgetId);
+        if (!target) return prev;
+        const newWidget: WidgetInstance = {
+          ...target,
+          id: `widget-${Date.now()}`,
+          x: target.x + 20,
+          y: target.y + 20,
+          zIndex: Math.max(...prev.map((w) => w.zIndex), 10) + 1,
+        };
+        const next = [...prev, newWidget];
+        broadcastWidgets(next);
+        return next;
+      });
+    });
+
+    const unSettings = window.electronAPI.onWidgetActionSettings?.((widgetId) => {
+      setWidgets((prev) => {
+        const target = prev.find((w) => w.id === widgetId);
+        if (target) {
+          setSettingsModalWidget(target);
+        }
+        return prev;
+      });
+    });
+
+    return () => {
+      unDelete?.();
+      unLock?.();
+      unDuplicate?.();
+      unSettings?.();
+    };
+  }, []);
+
   // Widget mutation handlers
   const handleUpdateWidget = (id: string, updates: Partial<WidgetInstance>) => {
     setWidgets((prev) => {
@@ -170,6 +221,9 @@ export const WidgetBoard: React.FC = () => {
         isOpen={!!settingsModalWidget}
         onClose={() => setSettingsModalWidget(null)}
         onSave={handleSaveWidgetConfig}
+        onUpdateDimensions={(id, newW, newH) => {
+          handleUpdateWidget(id, { width: newW, height: newH });
+        }}
       />
     </div>
   );

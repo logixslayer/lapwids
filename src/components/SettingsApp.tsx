@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import type { AppSettings, WidgetInstance, WidgetType, AnyWidgetConfig } from '../types/widgets';
-import { INITIAL_WIDGETS, ART_PRESETS } from '../data/presets';
+import { 
+  INITIAL_WIDGETS, 
+  ART_PRESETS, 
+  CLOCK_STYLE_PRESETS, 
+  WEATHER_STYLE_PRESETS, 
+  CALENDAR_STYLE_PRESETS, 
+  TODO_STYLE_PRESETS 
+} from '../data/presets';
 import { 
   Sliders, 
   Layers, 
@@ -31,6 +38,12 @@ import {
 import { subscribeToSync, broadcastSettings, broadcastWidgets, applyFontToDOM } from '../utils/syncChannel';
 import { BUILTIN_TEMPLATES, loadCustomTemplates, saveCustomTemplate, deleteCustomTemplate } from '../data/templates';
 import type { DesktopTemplate } from '../types/widgets';
+import { FlipClockWidget } from './widgets/FlipClockWidget';
+import { MinimalDigitalClockWidget } from './widgets/MinimalDigitalClockWidget';
+import { WeatherWidget } from './widgets/WeatherWidget';
+import { CalendarWidget } from './widgets/CalendarWidget';
+import { TodoListWidget } from './widgets/TodoListWidget';
+import { MediaFrameWidget } from './widgets/MediaFrameWidget';
 
 const STORAGE_KEY_WIDGETS = 'lapwids_widgets_layout_v1';
 const STORAGE_KEY_SETTINGS = 'lapwids_app_settings_v1';
@@ -99,12 +112,10 @@ export const SettingsApp: React.FC = () => {
   const allTemplates = [...BUILTIN_TEMPLATES, ...customTemplates];
 
   const handleApplyTemplate = (template: DesktopTemplate) => {
+    // Only apply widgets and optionally typography/accent - do NOT change wallpaper or backgroundMode
     const updates: Partial<AppSettings> = {
       fontFamily: template.fontFamily,
       accentColor: template.accentColor,
-      backgroundMode: template.backgroundMode || (template.wallpaperUrl ? 'wallpaper' : 'desktop-mimic'),
-      wallpaperPreset: template.wallpaperPreset || 'renaissance',
-      customWallpaperUrl: template.wallpaperUrl || '',
     };
 
     const clonedWidgets = template.widgets.map((w, idx) => ({
@@ -182,26 +193,32 @@ export const SettingsApp: React.FC = () => {
     });
   };
 
-  const handleAddWidgetByType = (type: WidgetType) => {
+  const [addedFeedbackType, setAddedFeedbackType] = useState<string | null>(null);
+
+  const handleAddWidgetByType = (type: WidgetType, customConfig?: AnyWidgetConfig, customDims?: { width?: number; height?: number }) => {
     const baseW = INITIAL_WIDGETS.find((w) => w.type === type);
     const highestZ = Math.max(...widgets.map((w) => w.zIndex), 10);
     const created: WidgetInstance = {
-      id: `widget-${Date.now()}`,
+      id: `widget-${type}-${Date.now()}`,
       type: type,
-      x: 60 + Math.random() * 80,
-      y: 60 + Math.random() * 80,
-      width: baseW ? baseW.width : 200,
-      height: baseW ? baseW.height : 160,
+      x: 80 + Math.random() * 80,
+      y: 80 + Math.random() * 80,
+      width: customDims?.width ?? (baseW ? baseW.width : 200),
+      height: customDims?.height ?? (baseW ? baseW.height : 160),
       zIndex: highestZ + 1,
       isLocked: false,
       isVisible: true,
-      config: baseW ? { ...baseW.config } : ({ opacity: 1 } as AnyWidgetConfig),
+      config: customConfig ? { ...customConfig } : (baseW ? { ...baseW.config } : ({ opacity: 1 } as AnyWidgetConfig)),
     };
     setWidgets((prev) => {
       const next = [...prev, created];
       broadcastWidgets(next);
       return next;
     });
+    setAddedFeedbackType(type);
+    setTimeout(() => {
+      setAddedFeedbackType((cur) => (cur === type ? null : cur));
+    }, 2200);
   };
 
   const handleResetLayout = () => {
@@ -413,7 +430,7 @@ export const SettingsApp: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-neutral-400 max-w-xl">
-                    One-click coordinated desktop setups with matched aesthetic wallpapers, distinct typography, and tailored widget combinations.
+                    One-click coordinated widget layouts with distinct typography, tailored widget placements, and custom styles.
                   </p>
                 </div>
 
@@ -428,7 +445,7 @@ export const SettingsApp: React.FC = () => {
 
               {/* Category Filter Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                {['All', 'Cyberpunk', 'Gothic Noir', 'Minimalist', 'Developer', 'Lo-Fi Aesthetic', 'Fine Art', 'My Saved'].map((cat) => (
+                {['All', 'Performance Noir', 'Tactical Studio', 'My Saved'].map((cat) => (
                   <button
                     key={cat}
                     onClick={() => setTemplateCategory(cat)}
@@ -452,18 +469,7 @@ export const SettingsApp: React.FC = () => {
                     return t.category.toLowerCase().includes(templateCategory.toLowerCase());
                   })
                   .map((t) => {
-                    const isCurrentlyActive =
-                      appliedTemplateId === t.id ||
-                      (settings.fontFamily === t.fontFamily &&
-                        (t.wallpaperPreset ? settings.wallpaperPreset === t.wallpaperPreset : true));
-
-                    const thumbSrc =
-                      t.wallpaperUrl ||
-                      (t.wallpaperPreset === 'smoke'
-                        ? '/wallpapers/dark_smoke.jpg'
-                        : t.wallpaperPreset === 'renaissance'
-                        ? '/wallpapers/dark_renaissance.jpg'
-                        : null);
+                    const isCurrentlyActive = appliedTemplateId === t.id;
 
                     const uniqueWidgetTypes = Array.from(new Set(t.widgets.map((w) => w.type)));
 
@@ -476,37 +482,32 @@ export const SettingsApp: React.FC = () => {
                             : 'bg-[#14161f] border-white/[0.08] hover:border-white/20 hover:bg-[#181a25]'
                         }`}
                       >
-                        {/* Wallpaper Banner Preview */}
-                        <div className="h-36 relative overflow-hidden bg-black/80 flex items-center justify-center">
-                          {thumbSrc ? (
-                            <img
-                              src={thumbSrc}
-                              alt={t.name}
-                              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                            />
-                          ) : t.backgroundMode === 'mesh-gradient' ? (
-                            <div className="w-full h-full bg-gradient-to-br from-neutral-800 via-neutral-900 to-[#0c0e14]" />
-                          ) : (
-                            <div className="w-full h-full bg-[#08090d] flex items-center justify-center text-neutral-600 font-mono text-xs">
-                              Matte Pitch Black
+                        {/* Widget Layout Banner Preview */}
+                        <div className="h-28 relative overflow-hidden bg-[#0c0e14] border-b border-white/[0.06] flex items-center justify-center p-3">
+                          {/* Mini Layout Blueprint Visualizer */}
+                          <div className="w-full h-full rounded-lg bg-black/40 border border-white/5 relative overflow-hidden flex items-center justify-center">
+                            <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:12px_12px] opacity-40 pointer-events-none" />
+                            <div className="text-center z-10">
+                              <span className="text-xs font-mono font-bold tracking-wider text-neutral-300">
+                                {t.widgets.length} WIDGETS
+                              </span>
+                              <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
+                                Layout Coordinates Preset
+                              </div>
                             </div>
-                          )}
-
-                          {/* Dark overlay for contrast */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-[#14161f] via-black/40 to-transparent" />
-                          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent w-[60%]" />
+                          </div>
 
                           {/* Category badge */}
-                          <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-[10px] font-mono text-neutral-300">
+                          <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-[10px] font-mono text-neutral-300">
                             {t.category}
                           </div>
 
                           {/* Floating widget badges over preview */}
-                          <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5 flex-wrap">
+                          <div className="absolute bottom-2 left-2 flex items-center gap-1.5 flex-wrap">
                             {uniqueWidgetTypes.map((type) => (
                               <span
                                 key={type}
-                                className="px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md border border-white/10 text-[9px] font-mono text-neutral-300 uppercase tracking-wider"
+                                className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 text-[9px] font-mono text-neutral-300 uppercase tracking-wider"
                               >
                                 {type}
                               </span>
@@ -545,13 +546,6 @@ export const SettingsApp: React.FC = () => {
                               >
                                 Aa {t.fontFamily}
                               </div>
-                              <span className="text-[10px] text-neutral-500 font-mono">
-                                {t.backgroundMode === 'solid-dark'
-                                  ? 'Matte Dark'
-                                  : t.backgroundMode === 'mesh-gradient'
-                                  ? 'Mesh Gradient'
-                                  : 'Wallpaper'}
-                              </span>
                             </div>
 
                             <div className="flex items-center gap-1.5">
@@ -888,12 +882,122 @@ export const SettingsApp: React.FC = () => {
           )}
 
           {/* TAB 3: FLIP CLOCK */}
-          {activeTab === 'clock' && (
-            <div className="space-y-4 max-w-2xl">
-              <div>
-                <h2 className="text-lg font-semibold text-white mb-0.5">Flip Clock Settings</h2>
-                <p className="text-xs text-neutral-400">Configure time format and mechanical flip card display.</p>
-              </div>
+          {activeTab === 'clock' && (() => {
+            const currentClockWidget = widgets.find((w) => w.type === 'clock') || {
+              id: 'preview-clock',
+              type: 'clock' as const,
+              x: 0,
+              y: 0,
+              width: 250,
+              height: 135,
+              zIndex: 1,
+              isLocked: false,
+              isVisible: true,
+              config: CLOCK_STYLE_PRESETS[0].config,
+            };
+            const clockCfg = currentClockWidget.config as any;
+            const clockFont = clockCfg.fontStyle || settings.fontFamily || 'Outfit';
+
+            return (
+              <div className="space-y-5 max-w-2xl">
+                <div>
+                  <h2 className="text-lg font-semibold text-white mb-0.5">Flip Clock Settings</h2>
+                  <p className="text-xs text-neutral-400">Configure time format and mechanical flip card display.</p>
+                </div>
+
+                {/* Live Widget Preview Card */}
+                <div className="p-4 rounded-2xl bg-[#0e1017] border border-cyan-500/25 shadow-[0_10px_30px_rgba(0,0,0,0.6)] relative overflow-hidden">
+                  <div className="flex items-center justify-between mb-3 border-b border-white/[0.06] pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                      <span className="text-xs font-mono uppercase tracking-wider text-cyan-300 font-semibold">
+                        Live Widget Preview
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-neutral-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/5 hidden sm:inline-block">
+                        Font: {clockFont} • {clockCfg.format24 ? '24H' : '12H'}
+                      </span>
+                      <button
+                        onClick={() => handleAddWidgetByType('clock', clockCfg, { width: 300, height: 135 })}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium font-sans transition-all duration-200 shadow-sm ${
+                          addedFeedbackType === 'clock'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 scale-105'
+                            : 'bg-cyan-500 hover:bg-cyan-400 text-black font-semibold hover:shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                        }`}
+                        title="Add this clock widget to your desktop"
+                      >
+                        {addedFeedbackType === 'clock' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>Added to Desktop!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>+ Add Widget</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Canvas Viewport */}
+                  <div 
+                    style={{ fontFamily: `'${clockFont}', sans-serif` }}
+                    className="w-full h-44 rounded-xl bg-[radial-gradient(#1e2433_1px,transparent_1px)] bg-[size:12px_12px] bg-[#090b10] border border-white/5 flex items-center justify-center p-2 relative shadow-inner overflow-hidden"
+                  >
+                    <div className="w-[300px] h-[135px] flex items-center justify-center">
+                      {clockCfg.clockType === 'minimal-digital' ? (
+                        <MinimalDigitalClockWidget
+                          config={clockCfg}
+                          width={300}
+                          height={135}
+                        />
+                      ) : (
+                        <FlipClockWidget 
+                          config={clockCfg} 
+                          width={300} 
+                          height={135} 
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Style Presets from Templates */}
+                <div className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
+                  <div className="text-xs font-semibold text-white font-mono uppercase tracking-wider">
+                    Clock Style Presets
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CLOCK_STYLE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          const firstClock = widgets.find((w) => w.type === 'clock');
+                          if (firstClock) {
+                            handleUpdateWidget(firstClock.id, {
+                              config: {
+                                ...firstClock.config,
+                                ...preset.config,
+                              },
+                            });
+                          }
+                        }}
+                        className="p-2.5 rounded-lg bg-[#1c1f2b] hover:bg-[#252938] border border-white/10 hover:border-cyan-400/50 text-left transition-all group"
+                      >
+                        <div className="text-xs font-medium text-white group-hover:text-cyan-300">
+                          {preset.name}
+                        </div>
+                        <div className="text-[10px] text-neutral-400 mt-0.5">
+                          {preset.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
               {widgets.filter((w) => w.type === 'clock').map((clockW) => {
                 const cfg = clockW.config as any;
@@ -907,6 +1011,20 @@ export const SettingsApp: React.FC = () => {
                         onChange={(e) =>
                           handleUpdateWidget(clockW.id, {
                             config: { ...cfg, format24: e.target.checked },
+                          })
+                        }
+                        className="rounded bg-black border-white/20 accent-neutral-300 w-4 h-4 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-xs text-neutral-300">Show Seconds</span>
+                      <input
+                        type="checkbox"
+                        checked={cfg.showSeconds}
+                        onChange={(e) =>
+                          handleUpdateWidget(clockW.id, {
+                            config: { ...cfg, showSeconds: e.target.checked },
                           })
                         }
                         className="rounded bg-black border-white/20 accent-neutral-300 w-4 h-4 cursor-pointer"
@@ -930,191 +1048,686 @@ export const SettingsApp: React.FC = () => {
                 );
               })}
             </div>
-          )}
+          );
+        })()}
 
           {/* TAB 4: WEATHER */}
-          {activeTab === 'weather' && (
-            <div className="space-y-4 max-w-2xl">
-              <div>
-                <h2 className="text-lg font-semibold text-white mb-0.5">Weather Configuration</h2>
-                <p className="text-xs text-neutral-400">Configure local location and forecast options.</p>
-              </div>
+          {activeTab === 'weather' && (() => {
+            const currentWeatherWidget = widgets.find((w) => w.type === 'weather') || {
+              id: 'preview-weather',
+              type: 'weather' as const,
+              x: 0,
+              y: 0,
+              width: 250,
+              height: 230,
+              zIndex: 1,
+              isLocked: false,
+              isVisible: true,
+              config: WEATHER_STYLE_PRESETS[0].config,
+            };
+            const weatherCfg = currentWeatherWidget.config as any;
+            const weatherFont = weatherCfg.fontStyle || settings.fontFamily || 'Outfit';
 
-              {widgets.filter((w) => w.type === 'weather').map((weatherW) => {
-                const cfg = weatherW.config as any;
-                return (
-                  <div key={weatherW.id} className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
-                    <div>
-                      <label className="text-xs text-neutral-400 block mb-1">City / Region Label</label>
-                      <input
-                        type="text"
-                        value={cfg.city || ''}
-                        onChange={(e) =>
-                          handleUpdateWidget(weatherW.id, {
-                            config: { ...cfg, city: e.target.value },
-                          })
-                        }
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-sans text-xs"
-                      />
+            return (
+              <div className="space-y-5 max-w-2xl">
+                <div>
+                  <h2 className="text-lg font-semibold text-white mb-0.5">Weather Configuration</h2>
+                  <p className="text-xs text-neutral-400">Configure local location and forecast options.</p>
+                </div>
+
+                {/* Live Widget Preview Card */}
+                <div className="p-4 rounded-2xl bg-[#0e1017] border border-cyan-500/25 shadow-[0_10px_30px_rgba(0,0,0,0.6)] relative overflow-hidden">
+                  <div className="flex items-center justify-between mb-3 border-b border-white/[0.06] pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                      <span className="text-xs font-mono uppercase tracking-wider text-cyan-300 font-semibold">
+                        Live Widget Preview
+                      </span>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-neutral-400 block mb-1">Latitude</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={cfg.latitude}
-                          onChange={(e) =>
-                            handleUpdateWidget(weatherW.id, {
-                              config: { ...cfg, latitude: parseFloat(e.target.value) || 0 },
-                            })
-                          }
-                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-mono text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-neutral-400 block mb-1">Longitude</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={cfg.longitude}
-                          onChange={(e) =>
-                            handleUpdateWidget(weatherW.id, {
-                              config: { ...cfg, longitude: parseFloat(e.target.value) || 0 },
-                            })
-                          }
-                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-mono text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-neutral-400 block mb-1">Temperature Unit</label>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleUpdateWidget(weatherW.id, {
-                              config: { ...cfg, unit: 'fahrenheit' },
-                            })
-                          }
-                          className={`flex-1 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
-                            cfg.unit === 'fahrenheit' ? 'bg-white/20 border-white text-white' : 'border-white/10 hover:bg-white/5'
-                          }`}
-                        >
-                          Fahrenheit (°F)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleUpdateWidget(weatherW.id, {
-                              config: { ...cfg, unit: 'celsius' },
-                            })
-                          }
-                          className={`flex-1 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
-                            cfg.unit === 'celsius' ? 'bg-white/20 border-white text-white' : 'border-white/10 hover:bg-white/5'
-                          }`}
-                        >
-                          Celsius (°C)
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-neutral-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/5 hidden sm:inline-block">
+                        {weatherCfg.city || 'Weather'} • {weatherCfg.unit === 'celsius' ? '°C' : '°F'}
+                      </span>
+                      <button
+                        onClick={() => handleAddWidgetByType('weather', weatherCfg, { width: 250, height: 230 })}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium font-sans transition-all duration-200 shadow-sm ${
+                          addedFeedbackType === 'weather'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 scale-105'
+                            : 'bg-cyan-500 hover:bg-cyan-400 text-black font-semibold hover:shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                        }`}
+                        title="Add this weather widget to your desktop"
+                      >
+                        {addedFeedbackType === 'weather' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>Added to Desktop!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>+ Add Widget</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  <div 
+                    style={{ fontFamily: `'${weatherFont}', sans-serif` }}
+                    className="w-full h-64 rounded-xl bg-[radial-gradient(#1e2433_1px,transparent_1px)] bg-[size:12px_12px] bg-[#090b10] border border-white/5 flex items-center justify-center p-3 relative shadow-inner overflow-hidden"
+                  >
+                    <div className="w-[240px] h-[230px] flex items-center justify-center">
+                      <WeatherWidget 
+                        config={weatherCfg} 
+                        width={240} 
+                        height={230} 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Style Presets from Templates */}
+                <div className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
+                  <div className="text-xs font-semibold text-white font-mono uppercase tracking-wider">
+                    Weather Style Presets
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {WEATHER_STYLE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          const firstWeather = widgets.find((w) => w.type === 'weather');
+                          if (firstWeather) {
+                            handleUpdateWidget(firstWeather.id, {
+                              config: {
+                                ...firstWeather.config,
+                                ...preset.config,
+                              },
+                            });
+                          }
+                        }}
+                        className="p-2.5 rounded-lg bg-[#1c1f2b] hover:bg-[#252938] border border-white/10 hover:border-cyan-400/50 text-left transition-all group"
+                      >
+                        <div className="text-xs font-medium text-white group-hover:text-cyan-300">
+                          {preset.name}
+                        </div>
+                        <div className="text-[10px] text-neutral-400 mt-0.5">
+                          {preset.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {widgets.filter((w) => w.type === 'weather').map((weatherW) => {
+                  const cfg = weatherW.config as any;
+                  return (
+                    <div key={weatherW.id} className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
+                      <div>
+                        <label className="text-xs text-neutral-400 block mb-1">City / Region Label</label>
+                        <input
+                          type="text"
+                          value={cfg.city || ''}
+                          onChange={(e) =>
+                            handleUpdateWidget(weatherW.id, {
+                              config: { ...cfg, city: e.target.value },
+                            })
+                          }
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-sans text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-neutral-400 block mb-1">Custom Status Description</label>
+                        <input
+                          type="text"
+                          value={cfg.customLocationName || ''}
+                          onChange={(e) =>
+                            handleUpdateWidget(weatherW.id, {
+                              config: { ...cfg, customLocationName: e.target.value },
+                            })
+                          }
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-sans text-xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-neutral-400 block mb-1">Latitude</label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={cfg.latitude}
+                            onChange={(e) =>
+                              handleUpdateWidget(weatherW.id, {
+                                config: { ...cfg, latitude: parseFloat(e.target.value) || 0 },
+                              })
+                            }
+                            className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-mono text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-neutral-400 block mb-1">Longitude</label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={cfg.longitude}
+                            onChange={(e) =>
+                              handleUpdateWidget(weatherW.id, {
+                                config: { ...cfg, longitude: parseFloat(e.target.value) || 0 },
+                              })
+                            }
+                            className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-mono text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-neutral-400 block mb-1">Temperature Unit</label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdateWidget(weatherW.id, {
+                                config: { ...cfg, unit: 'fahrenheit' },
+                              })
+                            }
+                            className={`flex-1 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
+                              cfg.unit === 'fahrenheit' ? 'bg-white/20 border-white text-white' : 'border-white/10 hover:bg-white/5'
+                            }`}
+                          >
+                            Fahrenheit (°F)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdateWidget(weatherW.id, {
+                                config: { ...cfg, unit: 'celsius' },
+                              })
+                            }
+                            className={`flex-1 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
+                              cfg.unit === 'celsius' ? 'bg-white/20 border-white text-white' : 'border-white/10 hover:bg-white/5'
+                            }`}
+                          >
+                            Celsius (°C)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Temperature Degree Color */}
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                        <span className="text-xs text-neutral-300">Temperature (° Degrees) Color</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={cfg.tempColor || cfg.fontColor || '#ffffff'}
+                            onChange={(e) =>
+                              handleUpdateWidget(weatherW.id, {
+                                config: { ...cfg, tempColor: e.target.value },
+                              })
+                            }
+                            className="w-5 h-5 rounded cursor-pointer border border-white/20 bg-transparent p-0"
+                          />
+                          {cfg.tempColor && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateWidget(weatherW.id, {
+                                  config: { ...cfg, tempColor: '' },
+                                })
+                              }
+                              className="text-[10px] text-neutral-400 hover:text-white underline font-mono"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Weather Icon Color */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-300">Weather Icon Color</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={cfg.iconColor || cfg.fontColor || '#e5e5e5'}
+                            onChange={(e) =>
+                              handleUpdateWidget(weatherW.id, {
+                                config: { ...cfg, iconColor: e.target.value },
+                              })
+                            }
+                            className="w-5 h-5 rounded cursor-pointer border border-white/20 bg-transparent p-0"
+                          />
+                          {cfg.iconColor && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateWidget(weatherW.id, {
+                                  config: { ...cfg, iconColor: '' },
+                                })
+                              }
+                              className="text-[10px] text-neutral-400 hover:text-white underline font-mono"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* TAB 5: CALENDAR */}
-          {activeTab === 'calendar' && (
-            <div className="space-y-4 max-w-2xl">
-              <div>
-                <h2 className="text-lg font-semibold text-white mb-0.5">Calendar Settings</h2>
-                <p className="text-xs text-neutral-400">Manage calendar week starts and event reminders.</p>
-              </div>
+          {activeTab === 'calendar' && (() => {
+            const currentCalWidget = widgets.find((w) => w.type === 'calendar') || {
+              id: 'preview-cal',
+              type: 'calendar' as const,
+              x: 0,
+              y: 0,
+              width: 250,
+              height: 260,
+              zIndex: 1,
+              isLocked: false,
+              isVisible: true,
+              config: CALENDAR_STYLE_PRESETS[0].config,
+            };
+            const calCfg = currentCalWidget.config as any;
+            const calFont = calCfg.fontStyle || settings.fontFamily || 'Outfit';
 
-              {widgets.filter((w) => w.type === 'calendar').map((calW) => {
-                const cfg = calW.config as any;
-                return (
-                  <div key={calW.id} className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
-                    <label className="flex items-center justify-between cursor-pointer">
-                      <span className="text-xs text-neutral-300">Show Week Numbers on Left</span>
-                      <input
-                        type="checkbox"
-                        checked={cfg.showWeekNumbers}
-                        onChange={(e) =>
-                          handleUpdateWidget(calW.id, {
-                            config: { ...cfg, showWeekNumbers: e.target.checked },
-                          })
-                        }
-                        className="rounded bg-black border-white/20 accent-neutral-300 w-4 h-4 cursor-pointer"
-                      />
-                    </label>
+            return (
+              <div className="space-y-5 max-w-2xl">
+                <div>
+                  <h2 className="text-lg font-semibold text-white mb-0.5">Calendar Settings</h2>
+                  <p className="text-xs text-neutral-400">Manage calendar week starts and event reminders.</p>
+                </div>
 
-                    <label className="flex items-center justify-between cursor-pointer">
-                      <span className="text-xs text-neutral-300">Start Week on Monday</span>
-                      <input
-                        type="checkbox"
-                        checked={cfg.startMonday}
-                        onChange={(e) =>
-                          handleUpdateWidget(calW.id, {
-                            config: { ...cfg, startMonday: e.target.checked },
-                          })
-                        }
-                        className="rounded bg-black border-white/20 accent-neutral-300 w-4 h-4 cursor-pointer"
-                      />
-                    </label>
+                {/* Live Widget Preview Card */}
+                <div className="p-4 rounded-2xl bg-[#0e1017] border border-cyan-500/25 shadow-[0_10px_30px_rgba(0,0,0,0.6)] relative overflow-hidden">
+                  <div className="flex items-center justify-between mb-3 border-b border-white/[0.06] pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                      <span className="text-xs font-mono uppercase tracking-wider text-cyan-300 font-semibold">
+                        Live Widget Preview
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-neutral-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/5 hidden sm:inline-block">
+                        Font: {calFont} • {calCfg.showWeekNumbers === true ? 'Week Nums' : 'Minimal'}
+                      </span>
+                      <button
+                        onClick={() => handleAddWidgetByType('calendar', calCfg, { width: 240, height: 260 })}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium font-sans transition-all duration-200 shadow-sm ${
+                          addedFeedbackType === 'calendar'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 scale-105'
+                            : 'bg-cyan-500 hover:bg-cyan-400 text-black font-semibold hover:shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                        }`}
+                        title="Add this calendar widget to your desktop"
+                      >
+                        {addedFeedbackType === 'calendar' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>Added to Desktop!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>+ Add Widget</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  <div 
+                    style={{ fontFamily: `'${calFont}', sans-serif` }}
+                    className="w-full h-72 rounded-xl bg-[radial-gradient(#1e2433_1px,transparent_1px)] bg-[size:12px_12px] bg-[#090b10] border border-white/5 flex items-center justify-center p-3 relative shadow-inner overflow-hidden"
+                  >
+                    <div className="w-[240px] h-[260px] flex items-center justify-center">
+                      <CalendarWidget 
+                        config={calCfg} 
+                        width={240} 
+                        height={260} 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Style Presets from Templates */}
+                <div className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
+                  <div className="text-xs font-semibold text-white font-mono uppercase tracking-wider">
+                    Calendar Style Presets
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CALENDAR_STYLE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          const firstCal = widgets.find((w) => w.type === 'calendar');
+                          if (firstCal) {
+                            handleUpdateWidget(firstCal.id, {
+                              config: {
+                                ...firstCal.config,
+                                ...preset.config,
+                              },
+                            });
+                          }
+                        }}
+                        className="p-2.5 rounded-lg bg-[#1c1f2b] hover:bg-[#252938] border border-white/10 hover:border-cyan-400/50 text-left transition-all group"
+                      >
+                        <div className="text-xs font-medium text-white group-hover:text-cyan-300">
+                          {preset.name}
+                        </div>
+                        <div className="text-[10px] text-neutral-400 mt-0.5">
+                          {preset.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {widgets.filter((w) => w.type === 'calendar').map((calW) => {
+                  const cfg = calW.config as any;
+                  return (
+                    <div key={calW.id} className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span className="text-xs text-neutral-300">Show Week Numbers on Left</span>
+                        <input
+                          type="checkbox"
+                          checked={cfg.showWeekNumbers}
+                          onChange={(e) =>
+                            handleUpdateWidget(calW.id, {
+                              config: { ...cfg, showWeekNumbers: e.target.checked },
+                            })
+                          }
+                          className="rounded bg-black border-white/20 accent-neutral-300 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span className="text-xs text-neutral-300">Start Week on Monday</span>
+                        <input
+                          type="checkbox"
+                          checked={cfg.startMonday}
+                          onChange={(e) =>
+                            handleUpdateWidget(calW.id, {
+                              config: { ...cfg, startMonday: e.target.checked },
+                            })
+                          }
+                          className="rounded bg-black border-white/20 accent-neutral-300 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <div className="pt-2 border-t border-white/5 space-y-2">
+                        <label className="text-xs text-neutral-300 block">Month & Year Title Font</label>
+                        <select
+                          value={cfg.headerFontStyle || ''}
+                          onChange={(e) =>
+                            handleUpdateWidget(calW.id, {
+                              config: { ...cfg, headerFontStyle: e.target.value },
+                            })
+                          }
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-sans text-xs focus:outline-none focus:border-cyan-400"
+                        >
+                          <option value="">Same as Calendar Font</option>
+                          {['Cinzel', 'Playfair Display', 'Orbitron', 'Outfit', 'Inter', 'JetBrains Mono', 'Caveat', 'Comfortaa'].map((f) => (
+                            <option key={f} value={f}>
+                              {f}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-300">Month & Year Title Color</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={cfg.headerFontColor || '#ffffff'}
+                            onChange={(e) =>
+                              handleUpdateWidget(calW.id, {
+                                config: { ...cfg, headerFontColor: e.target.value },
+                              })
+                            }
+                            className="w-5 h-5 rounded cursor-pointer border border-white/20 bg-transparent p-0"
+                          />
+                          {cfg.headerFontColor && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateWidget(calW.id, {
+                                  config: { ...cfg, headerFontColor: '' },
+                                })
+                              }
+                              className="text-[10px] text-neutral-400 hover:text-white underline font-mono"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-300">Today's Date Text Color</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={cfg.todayColor || '#38bdf8'}
+                            onChange={(e) =>
+                              handleUpdateWidget(calW.id, {
+                                config: { ...cfg, todayColor: e.target.value },
+                              })
+                            }
+                            className="w-5 h-5 rounded cursor-pointer border border-white/20 bg-transparent p-0"
+                          />
+                          {cfg.todayColor && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateWidget(calW.id, {
+                                  config: { ...cfg, todayColor: '' },
+                                })
+                              }
+                              className="text-[10px] text-neutral-400 hover:text-white underline font-mono"
+                            >
+                              Reset (Blue)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <label className="flex items-center justify-between cursor-pointer pt-1">
+                        <span className="text-xs text-neutral-300">Show "Today" Button</span>
+                        <input
+                          type="checkbox"
+                          checked={cfg.showTodayButton === true}
+                          onChange={(e) =>
+                            handleUpdateWidget(calW.id, {
+                              config: { ...cfg, showTodayButton: e.target.checked },
+                            })
+                          }
+                          className="rounded bg-black border-white/20 accent-neutral-300 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span className="text-xs text-neutral-300">Show Adjacent Month Dates</span>
+                        <input
+                          type="checkbox"
+                          checked={cfg.showAdjacentDays === true}
+                          onChange={(e) =>
+                            handleUpdateWidget(calW.id, {
+                              config: { ...cfg, showAdjacentDays: e.target.checked },
+                            })
+                          }
+                          className="rounded bg-black border-white/20 accent-neutral-300 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* TAB 6: TO-DO LIST */}
-          {activeTab === 'todo' && (
-            <div className="space-y-4 max-w-2xl">
-              <div>
-                <h2 className="text-lg font-semibold text-white mb-0.5">To-Do List Settings</h2>
-                <p className="text-xs text-neutral-400">Configure title header and ASCII aesthetic decor.</p>
-              </div>
+          {activeTab === 'todo' && (() => {
+            const currentTodoWidget = widgets.find((w) => w.type === 'todo') || {
+              id: 'preview-todo',
+              type: 'todo' as const,
+              x: 0,
+              y: 0,
+              width: 230,
+              height: 200,
+              zIndex: 1,
+              isLocked: false,
+              isVisible: true,
+              config: TODO_STYLE_PRESETS[0].config,
+            };
+            const todoCfg = currentTodoWidget.config as any;
+            const todoFont = todoCfg.fontStyle || settings.fontFamily || 'Outfit';
 
-              {widgets.filter((w) => w.type === 'todo').map((todoW) => {
-                const cfg = todoW.config as any;
-                return (
-                  <div key={todoW.id} className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
-                    <div>
-                      <label className="text-xs text-neutral-400 block mb-1">Header Title</label>
-                      <input
-                        type="text"
-                        value={cfg.headerTitle || ''}
-                        onChange={(e) =>
-                          handleUpdateWidget(todoW.id, {
-                            config: { ...cfg, headerTitle: e.target.value },
-                          })
-                        }
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-sans text-xs"
-                      />
+            return (
+              <div className="space-y-5 max-w-2xl">
+                <div>
+                  <h2 className="text-lg font-semibold text-white mb-0.5">To-Do List Settings</h2>
+                  <p className="text-xs text-neutral-400">Configure title header and ASCII aesthetic decor.</p>
+                </div>
+
+                {/* Live Widget Preview Card */}
+                <div className="p-4 rounded-2xl bg-[#0e1017] border border-cyan-500/25 shadow-[0_10px_30px_rgba(0,0,0,0.6)] relative overflow-hidden">
+                  <div className="flex items-center justify-between mb-3 border-b border-white/[0.06] pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                      <span className="text-xs font-mono uppercase tracking-wider text-cyan-300 font-semibold">
+                        Live Widget Preview
+                      </span>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-neutral-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/5 hidden sm:inline-block">
+                        Font: {todoFont} • {todoCfg.headerDecor || '✦'}
+                      </span>
+                      <button
+                        onClick={() => handleAddWidgetByType('todo', todoCfg, { width: 230, height: 190 })}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium font-sans transition-all duration-200 shadow-sm ${
+                          addedFeedbackType === 'todo'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 scale-105'
+                            : 'bg-cyan-500 hover:bg-cyan-400 text-black font-semibold hover:shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                        }`}
+                        title="Add this to-do widget to your desktop"
+                      >
+                        {addedFeedbackType === 'todo' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>Added to Desktop!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>+ Add Widget</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
-                    <div>
-                      <label className="text-xs text-neutral-400 block mb-1">ASCII Kaomoji / Decor</label>
-                      <input
-                        type="text"
-                        value={cfg.headerDecor || ''}
-                        onChange={(e) =>
-                          handleUpdateWidget(todoW.id, {
-                            config: { ...cfg, headerDecor: e.target.value },
-                          })
-                        }
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-sans text-xs"
+                  <div 
+                    style={{ fontFamily: `'${todoFont}', sans-serif` }}
+                    className="w-full h-56 rounded-xl bg-[radial-gradient(#1e2433_1px,transparent_1px)] bg-[size:12px_12px] bg-[#090b10] border border-white/5 flex items-center justify-center p-3 relative shadow-inner overflow-hidden"
+                  >
+                    <div className="w-[230px] h-[190px] flex items-center justify-center">
+                      <TodoListWidget 
+                        config={todoCfg} 
+                        width={230} 
+                        height={190} 
+                        onUpdateConfig={(updates) => {
+                          const firstTodo = widgets.find((w) => w.type === 'todo');
+                          if (firstTodo) {
+                            handleUpdateWidget(firstTodo.id, {
+                              config: { ...firstTodo.config, ...updates },
+                            });
+                          }
+                        }}
                       />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </div>
+
+                {/* Style Presets from Templates */}
+                <div className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
+                  <div className="text-xs font-semibold text-white font-mono uppercase tracking-wider">
+                    To-Do Style Presets
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TODO_STYLE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          const firstTodo = widgets.find((w) => w.type === 'todo');
+                          if (firstTodo) {
+                            handleUpdateWidget(firstTodo.id, {
+                              config: {
+                                ...firstTodo.config,
+                                ...preset.config,
+                              },
+                            });
+                          }
+                        }}
+                        className="p-2.5 rounded-lg bg-[#1c1f2b] hover:bg-[#252938] border border-white/10 hover:border-cyan-400/50 text-left transition-all group"
+                      >
+                        <div className="text-xs font-medium text-white group-hover:text-cyan-300">
+                          {preset.name}
+                        </div>
+                        <div className="text-[10px] text-neutral-400 mt-0.5">
+                          {preset.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {widgets.filter((w) => w.type === 'todo').map((todoW) => {
+                  const cfg = todoW.config as any;
+                  return (
+                    <div key={todoW.id} className="p-4 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-3">
+                      <div>
+                        <label className="text-xs text-neutral-400 block mb-1">Header Title</label>
+                        <input
+                          type="text"
+                          value={cfg.headerTitle || ''}
+                          onChange={(e) =>
+                            handleUpdateWidget(todoW.id, {
+                              config: { ...cfg, headerTitle: e.target.value },
+                            })
+                          }
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-sans text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-neutral-400 block mb-1">ASCII Kaomoji / Decor</label>
+                        <input
+                          type="text"
+                          value={cfg.headerDecor || ''}
+                          onChange={(e) =>
+                            handleUpdateWidget(todoW.id, {
+                              config: { ...cfg, headerDecor: e.target.value },
+                            })
+                          }
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white font-sans text-xs"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* TAB 7: ART PRESETS */}
           {activeTab === 'art' && (
@@ -1128,17 +1741,26 @@ export const SettingsApp: React.FC = () => {
                 {ART_PRESETS.map((preset) => (
                   <div
                     key={preset.id}
-                    className="p-2.5 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-2 group"
+                    className="p-2.5 rounded-xl bg-[#15171f] border border-white/[0.06] space-y-2 group flex flex-col justify-between"
                   >
-                    <div className="h-32 rounded-lg overflow-hidden relative">
-                      <img
-                        src={preset.url}
-                        alt={preset.name}
-                        className="w-full h-full object-cover grayscale contrast-125 group-hover:scale-105 transition-transform"
-                      />
+                    <div>
+                      <div className="h-32 rounded-lg overflow-hidden relative">
+                        <img
+                          src={preset.url}
+                          alt={preset.name}
+                          className="w-full h-full object-cover grayscale contrast-125 group-hover:scale-105 transition-transform"
+                        />
+                      </div>
+                      <div className="text-xs font-medium text-neutral-200 truncate mt-2">{preset.name}</div>
+                      <div className="text-[10px] text-neutral-400">{preset.category}</div>
                     </div>
-                    <div className="text-xs font-medium text-neutral-200 truncate">{preset.name}</div>
-                    <div className="text-[10px] text-neutral-400">{preset.category}</div>
+                    <button
+                      onClick={() => handleAddWidgetByType('media', { imageUrl: preset.url, caption: preset.name } as any, { width: 170, height: 210 })}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium bg-white/[0.04] hover:bg-cyan-500 hover:text-black border border-white/10 hover:border-cyan-400 text-neutral-300 transition-all duration-200"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Frame</span>
+                    </button>
                   </div>
                 ))}
               </div>

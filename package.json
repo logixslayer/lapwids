@@ -10,11 +10,44 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"cross-env BROWSER=none vite\" \"wait-on tcp:5173 && electron electron/main.cjs\"",
-    "electron:start": "electron electron/main.cjs"
+    "electron:start": "electron electron/main.cjs",
+    "build:electron": "npm run build && electron-builder --win dir",
+    "dist": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.lapwids.desktopwidgets",
+    "productName": "LapWids",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "dir"
+      ],
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LapWids",
+      "runAfterFinish": true
+    }
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.9",
+    "koffi": "^3.3.3",
     "lucide-react": "^1.33.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -30,6 +63,7 @@
     "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
     "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
     "oxlint": "^1.75.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.19",

@@ -21,6 +21,8 @@ export const TodoListWidget: React.FC<TodoListProps> = ({ config, width, height,
   const isTightW = currentW < 165;
   const isTightH = currentH < 140;
 
+  const fontMultiplier = config.fontSize ?? 1;
+
   const handleToggle = (id: string) => {
     const updated = items.map((it) => {
       if (it.id === id) {
@@ -59,16 +61,47 @@ export const TodoListWidget: React.FC<TodoListProps> = ({ config, width, height,
     setIsAdding(false);
   };
 
+  const bgTransparency = config.backgroundTransparency ?? 0;
+  const isFullyInvisible = bgTransparency >= 0.99;
+
+  const effectiveFontWeight = config.fontWeight === 'bolder' ? '800' : config.fontWeight === 'bold' ? '700' : config.fontWeight === 'medium' ? '500' : config.fontWeight === 'normal' ? '400' : config.fontWeight || undefined;
+
   return (
     <div className="flex flex-col h-full text-neutral-200 select-none overflow-hidden">
       {/* Top Header Bar */}
-      <div className={`flex items-center justify-between ${isTightH ? 'px-2.5 py-1.5' : 'px-3.5 py-2'} bg-white/[0.04] backdrop-blur-md border-b border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] shrink-0`}>
+      <div className={`flex items-center justify-between ${isTightH ? 'px-2.5 py-1.5' : 'px-3.5 py-2'} ${
+        isFullyInvisible
+          ? 'bg-transparent border-b border-transparent shadow-none'
+          : 'bg-white/[0.04] backdrop-blur-md border-b border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]'
+      } shrink-0`}>
         <div className="flex items-center gap-1.5 text-neutral-200 truncate">
-          <span className="font-serif italic font-normal text-[12px] tracking-wide truncate">
+          <span 
+            style={{
+              color: config.headerColor || config.fontColor || undefined,
+              fontWeight: effectiveFontWeight || '500',
+              fontSize: config.headerFontSize 
+                ? `${12 * config.headerFontSize}px` 
+                : fontMultiplier !== 1 
+                ? `${12 * fontMultiplier}px` 
+                : undefined,
+            }}
+            className="tracking-wide truncate"
+          >
             {isTightW ? 'to do:' : (config.headerTitle || 'to be list:')}
           </span>
           {!isTightW && (
-            <span className="text-[10px] text-neutral-400 select-none shrink-0">
+            <span 
+              style={{
+                color: config.headerColor ? `${config.headerColor}99` : undefined,
+                fontWeight: effectiveFontWeight,
+                fontSize: config.headerFontSize 
+                  ? `${10 * config.headerFontSize}px` 
+                  : fontMultiplier !== 1 
+                  ? `${10 * fontMultiplier}px` 
+                  : undefined,
+              }}
+              className="text-[10px] text-neutral-400 select-none shrink-0"
+            >
               {config.headerDecor || '˚ʚ♡ɞ˚'}
             </span>
           )}
@@ -92,6 +125,10 @@ export const TodoListWidget: React.FC<TodoListProps> = ({ config, width, height,
             onChange={(e) => setNewText(e.target.value)}
             placeholder="Type item..."
             autoFocus
+            style={{ 
+              fontSize: fontMultiplier !== 1 ? `${11 * fontMultiplier}px` : undefined,
+              fontWeight: effectiveFontWeight,
+            }}
             className="w-full bg-white/[0.06] border border-white/15 rounded-lg px-2 py-1 text-[11px] text-white placeholder-neutral-400 focus:outline-none focus:border-white/30 backdrop-blur-sm"
           />
         </form>
@@ -108,11 +145,16 @@ export const TodoListWidget: React.FC<TodoListProps> = ({ config, width, height,
             <div
               key={item.id}
               onClick={() => handleToggle(item.id)}
-              className={`flex items-center justify-between group cursor-pointer ${isTightH ? 'text-[11px]' : 'text-[12px]'} py-1 px-1.5 -mx-1.5 rounded-lg hover:bg-white/[0.06] hover:text-white transition-colors`}
+              className="flex items-center justify-between group cursor-pointer py-1 px-1.5 -mx-1.5 rounded-lg hover:bg-white/[0.06] hover:text-white transition-colors"
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-neutral-500 font-mono">-</span>
                 <span
+                  style={{
+                    color: item.completed ? undefined : (config.fontColor || undefined),
+                    fontWeight: effectiveFontWeight,
+                    fontSize: fontMultiplier !== 1 ? `${(isTightH ? 11 : 12) * fontMultiplier}px` : (isTightH ? '11px' : '12px'),
+                  }}
                   className={`truncate ${
                     item.completed ? 'line-through text-neutral-500 opacity-60' : 'text-neutral-300'
                   }`}
